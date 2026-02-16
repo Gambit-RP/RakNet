@@ -184,29 +184,17 @@ void ReliabilityLayer::InitializeVariables(void)
 	statistics.connectionStartTime = RakNet::GetTime();
 	splitPacketId = 0;
 	messageNumber = 0;
-<<<<<<< Updated upstream
-	availableBandwidth=0;
-	lastUpdateTime = RakNet::GetTimeNS();
-	currentBandwidth = SAMPRakNet::GetMinimumSendBitsPerSecond() * 2.0f;
-=======
 	availableBandwidth = 0;
 	lastUpdateTime = RakNet::GetTimeNS();
 	currentBandwidth = STARTING_SEND_BPS;
->>>>>>> Stashed changes
 	// lastPacketSendTime=retransmittedFrames=sentPackets=sentFrames=receivedPacketsCount=bytesSent=bytesReceived=0;
 
 	deadConnection = cheater = false;
 	lastAckTime = 0;
 
-<<<<<<< Updated upstream
-	lowBandwidth = SAMPRakNet::GetMinimumSendBitsPerSecond();
-	histogramStartTime=lastUpdateTime+TIME_TO_NEW_SAMPLE+ping*2*1000;
-	histogramEndTime=histogramStartTime+MAX_TIME_TO_SAMPLE;
-=======
 	lowBandwidth = STARTING_SEND_BPS;
 	histogramStartTime = lastUpdateTime + TIME_TO_NEW_SAMPLE + ping * 2 * 1000;
 	histogramEndTime = histogramStartTime + MAX_TIME_TO_SAMPLE;
->>>>>>> Stashed changes
 
 	highBandwidth = 0;
 	histogramPlossCount = 0;
@@ -1158,13 +1146,8 @@ void ReliabilityLayer::Update(SOCKET s, PlayerID playerId, int MTUSize, RakNetTi
 					lowBandwidth *= .9;
 				}
 
-<<<<<<< Updated upstream
-				if (lowBandwidth < minimumSendBPS)
-					lowBandwidth=minimumSendBPS;
-=======
 				if (lowBandwidth < MINIMUM_SEND_BPS)
 					lowBandwidth = MINIMUM_SEND_BPS;
->>>>>>> Stashed changes
 
 				delta = (highBandwidth - lowBandwidth) / 2;
 				currentBandwidth = delta + lowBandwidth;
@@ -1194,15 +1177,6 @@ void ReliabilityLayer::Update(SOCKET s, PlayerID playerId, int MTUSize, RakNetTi
 				// If a lot of packetloss at any time, decrease the low range by half
 				if (packetloss > .2)
 				{
-<<<<<<< Updated upstream
-					lowBandwidth/=2;
-					if (lowBandwidth < minimumSendBPS)
-						lowBandwidth=minimumSendBPS;
-				}
-
-				delta = (highBandwidth-lowBandwidth)/2;
-				if (delta < minimumSendBPS/4)
-=======
 					lowBandwidth /= 2;
 					if (lowBandwidth < MINIMUM_SEND_BPS)
 						lowBandwidth = MINIMUM_SEND_BPS;
@@ -1210,7 +1184,6 @@ void ReliabilityLayer::Update(SOCKET s, PlayerID playerId, int MTUSize, RakNetTi
 
 				delta = (highBandwidth - lowBandwidth) / 2;
 				if (delta < MINIMUM_SEND_BPS / 4)
->>>>>>> Stashed changes
 				{
 					// If no packetloss and done searching, increase the high range by 50%
 					if (packetloss == 0.0)
@@ -1225,15 +1198,9 @@ void ReliabilityLayer::Update(SOCKET s, PlayerID playerId, int MTUSize, RakNetTi
 					else if (packetloss < PACKETLOSS_TOLERANCE * 2)
 					{
 						// If some packetloss, but not a huge amount and done searching, decrease the low range by 10%
-<<<<<<< Updated upstream
-						lowBandwidth*=.9;
-						if (lowBandwidth < minimumSendBPS)
-							lowBandwidth=minimumSendBPS;
-=======
 						lowBandwidth *= .9;
 						if (lowBandwidth < MINIMUM_SEND_BPS)
 							lowBandwidth = MINIMUM_SEND_BPS;
->>>>>>> Stashed changes
 					}
 					delta = (highBandwidth - lowBandwidth) / 2;
 				}
