@@ -4565,7 +4565,7 @@ namespace RakNet
 				}
 
 				// Taken from SA-MP 0.3.7 changes
-				if ((remoteSystem->connectMode == RemoteSystemStruct::DISCONNECT_ASAP || remoteSystem->connectMode == RemoteSystemStruct::DISCONNECT_ASAP_SILENTLY) && timeMS - remoteSystem->lastReliableSend > 20000)
+				if ((remoteSystem->connectMode == RemoteSystemStruct::DISCONNECT_ASAP || remoteSystem->connectMode == RemoteSystemStruct::DISCONNECT_ASAP_SILENTLY) && timeMS > remoteSystem->connectionTime && timeMS - remoteSystem->lastReliableSend > 20000)
 				{
 					packet = AllocPacket(sizeof(char));
 					packet->data[0] = ID_CONNECTION_LOST; // DeadConnection
@@ -4575,7 +4575,7 @@ namespace RakNet
 
 					AddPacketToProducer(packet);
 
-					CloseConnectionInternal(playerId, true, true, 2);
+					CloseConnectionInternal(playerId, false, true, 2);
 					continue;
 				}
 
