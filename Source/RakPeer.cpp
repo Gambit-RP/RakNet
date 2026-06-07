@@ -858,6 +858,23 @@ bool RakPeer::Send( const char *data, const int length, PacketPriority priority,
 	return true;
 }
 
+bool RakPeer::Send(const char* data, const int length, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerIndex* broadcastList, int broadcastListSize)
+{
+	RakAssert(data && length > 0);
+
+	if (data == 0 || length < 0)
+		return false;
+
+	if (remoteSystemList == 0 || endThreads == true)
+		return false;
+
+	if (broadcastList == nullptr || broadcastListSize == 0)
+		return false;
+
+	SendBuffered(data, length, priority, reliability, orderingChannel, broadcastList, broadcastListSize);
+	return true;
+}
+
 bool RakPeer::Send( RakNet::BitStream const * bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerID playerId, bool broadcast )
 {
 
@@ -1413,6 +1430,27 @@ bool RakPeer::RPC( RPCID  uniqueID, const char *data, unsigned int bitLength, Pa
 	}
 
 	return true;	
+}
+
+bool RakPeer::RPC(RPCID uniqueID, const char* data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerIndex* broadcastList, int broadcastListSize)
+{
+	RakAssert(uniqueID);
+	RakAssert(orderingChannel >= 0 && orderingChannel < 32);
+
+	if (uniqueID == 0)
+		return false;
+
+	RakNet::BitStream outgoingBitStream;
+	outgoingBitStream.Write((unsigned char)ID_RPC);
+	outgoingBitStream.Write((BYTE)(uniqueID));
+	outgoingBitStream.WriteCompressed(bitLength);
+	if (bitLength > 0)
+		outgoingBitStream.WriteBits((const unsigned char*)data, bitLength, false);
+	else
+		outgoingBitStream.WriteCompressed((unsigned int)0);
+
+	Send((const char*)outgoingBitStream.GetData(), outgoingBitStream.GetNumberOfBitsUsed(), priority, reliability, orderingChannel, broadcastList, broadcastListSize);
+	return true;
 }
 
 
@@ -3599,8 +3637,39 @@ void RakPeer::SendBuffered( const char *data, int numberOfBitsToSend, PacketPrio
 	rakPeerMutexes[bufferedCommands_Mutex].Unlock();
 #endif
 }
+
+void RakPeer::SendBuffered(const char* data, int numberOfBitsToSend, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerIndex* broadcastList, int broadcastListSize)
+{
+	RakAssert(orderingChannel >= 0 && orderingChannel < 32);
+
+	BufferedCommandStruct* bcs;
+
+#ifdef _RAKNET_THREADSAFE
+	rakPeerMutexes[bufferedCommands_Mutex].Lock();
+#endif
+	char* dataToBeWritten = new char[BITS_TO_BYTES(numberOfBitsToSend)];
+	RakAssert(dataToBeWritten);
+	memcpy(dataToBeWritten, data, BITS_TO_BYTES(numberOfBitsToSend));
+
+	bcs = bufferedCommands.WriteLock();
+	bcs->data = dataToBeWritten;
+	bcs->numberOfBitsToSend = numberOfBitsToSend;
+	bcs->priority = priority;
+	bcs->reliability = reliability;
+	bcs->orderingChannel = orderingChannel;
+	bcs->broadcastList = broadcastList;
+	bcs->broadcastListSize = broadcastListSize;
+	bcs->broadcast = true;
+	bcs->connectionMode = RemoteSystemStruct::NO_ACTION;
+	bcs->command = BufferedCommandStruct::BCS_SEND_TO_LIST;
+	bufferedCommands.WriteUnlock();
+
+#ifdef _RAKNET_THREADSAFE
+	rakPeerMutexes[bufferedCommands_Mutex].Unlock();
+#endif
+}
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool RakPeer::SendImmediate( char *data, int numberOfBitsToSend, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerID playerId, bool broadcast, bool useCallerDataAllocation, RakNetTimeNS currentTime )
+bool RakPeer::SendImmediate(char* data, int numberOfBitsToSend, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerID playerId, bool broadcast, bool useCallerDataAllocation, RakNetTimeNS currentTime, PlayerIndex* broadcastList, int broadcastListSize)
 {
 	unsigned *sendList;
 	unsigned sendListSize;
@@ -3639,12 +3708,28 @@ bool RakPeer::SendImmediate( char *data, int numberOfBitsToSend, PacketPriority 
 		sendList = new unsigned[maximumNumberOfPeers];
 #endif
 
-		// remoteSystemList in network thread
-		for ( remoteSystemIndex = 0; remoteSystemIndex < maximumNumberOfPeers; remoteSystemIndex++ )
-		//for ( remoteSystemIndex = 0; remoteSystemIndex < remoteSystemListSize; remoteSystemIndex++ )
+		if (broadcastListSize && broadcastList)
 		{
-			if ( remoteSystemList[ remoteSystemIndex ].isActive && remoteSystemList[ remoteSystemIndex ].playerId != playerId && remoteSystemList[ remoteSystemIndex ].playerId != UNASSIGNED_PLAYER_ID )
-				sendList[sendListSize++]=remoteSystemIndex;
+			for (int i = 0; i < broadcastListSize; i++)
+			{
+				int remoteSystemIndex = broadcastList[i];
+				if (remoteSystemIndex != -1 && remoteSystemList[remoteSystemIndex].isActive &&
+					remoteSystemList[remoteSystemIndex].connectMode != RemoteSystemStruct::DISCONNECT_ASAP &&
+					remoteSystemList[remoteSystemIndex].connectMode != RemoteSystemStruct::DISCONNECT_ASAP_SILENTLY &&
+					remoteSystemList[remoteSystemIndex].connectMode != RemoteSystemStruct::DISCONNECT_ON_NO_ACK)
+				{
+					sendList[sendListSize++] = remoteSystemIndex;
+				}
+			}
+		}
+		else
+		{
+			// remoteSystemList in network thread
+			for ( remoteSystemIndex = 0; remoteSystemIndex < maximumNumberOfPeers; remoteSystemIndex++ )
+			{
+				if ( remoteSystemList[ remoteSystemIndex ].isActive && remoteSystemList[ remoteSystemIndex ].playerId != playerId && remoteSystemList[ remoteSystemIndex ].playerId != UNASSIGNED_PLAYER_ID )
+					sendList[sendListSize++]=remoteSystemIndex;
+			}
 		}
 	}
 
@@ -4372,6 +4457,18 @@ namespace RakNet
 					if (remoteSystem)
 						remoteSystem->connectMode=bcs->connectionMode;
 				}
+			}
+			else if (bcs->command == BufferedCommandStruct::BCS_SEND_TO_LIST)
+			{
+				if (timeNS == 0)
+					timeNS = RakNet::GetTimeNS();
+
+				callerDataAllocationUsed = SendImmediate((char*)bcs->data, bcs->numberOfBitsToSend, bcs->priority, bcs->reliability, bcs->orderingChannel, UNASSIGNED_PLAYER_ID, true, true, timeNS, bcs->broadcastList, bcs->broadcastListSize);
+
+				if (callerDataAllocationUsed == false)
+					delete[] bcs->data;
+
+				delete[] bcs->broadcastList;
 			}
 			else
 			{

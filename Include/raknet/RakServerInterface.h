@@ -81,6 +81,8 @@ namespace RakNet
 		/// \param[in] broadcast Whether to send to everyone or not.  If true, then the meaning of \a playerId changes to mean who NOT to send to.
 		/// \return Returns false on failure, true on success	
 		virtual bool Send( const char *data, const int length, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerID playerId, bool broadcast )=0;
+
+		virtual bool Send( const char* data, const int length, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerIndex* broadcastList = nullptr, int broadcastListSize = 0 ) = 0;
 		
 		/// /pre The server must be active.
 		/// Send the data stream of length \a length to whichever \a playerId you specify.
@@ -232,6 +234,8 @@ namespace RakNet
 		/// \param[in] replyFromTarget If 0, this function is non-blocking.  Otherwise it will block while waiting for a reply from the target procedure, which is remtely written to RPCParameters::replyToSender and copied to replyFromTarget.  The block will return early on disconnect or if the sent packet is unreliable and more than 3X the ping has elapsed.
 		/// \return True on a successful packet send (this does not indicate the recipient performed the call), false on failure\note This is part of the Remote Procedure Call Subsystem 
 		virtual bool RPC( RPCID uniqueID, const char *data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerID playerId, bool broadcast, bool shiftTimestamp, NetworkID networkID, RakNet::BitStream *replyFromTarget )=0;
+
+		virtual bool RPC( RPCID uniqueID, const char *data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, PlayerIndex* broadcastList = nullptr, int broadcastListSize = 0 )=0;
 
 		/// \ingroup RAKNET_RPC
 		/// Calls a C function on the remote system that was already registered using RegisterAsRemoteProcedureCall.
